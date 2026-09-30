@@ -1,3 +1,4 @@
+# Assessment: verify automatic Jenkins triggering.
 import os
 from flask import Flask
 import mysql.connector
