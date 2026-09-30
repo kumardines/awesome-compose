@@ -106,7 +106,10 @@ pipeline {
         stage('Deploy') {
             steps {
                 dir('nginx-flask-mysql') {
-                    sh '''
+                    sh 'bash deploy.sh'
+                }
+            }
+        }
                         set -eu
 
                         docker compose up -d \
