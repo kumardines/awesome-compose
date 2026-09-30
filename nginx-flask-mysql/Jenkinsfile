@@ -109,21 +109,23 @@ pipeline {
             }
         }
 
-        stage('Deploy and Verify with Rollback') {
+                stage('Deploy and Verify with Rollback') {
             steps {
                 dir('nginx-flask-mysql') {
                     sh 'bash deploy.sh'
                 }
             }
         }
-    }
-            stage('Image Cleanup') {
+
+        stage('Image Cleanup') {
             steps {
                 dir('nginx-flask-mysql') {
                     sh 'bash cleanup.sh'
                 }
             }
         }
+    }
+
 
     post {
         always {
