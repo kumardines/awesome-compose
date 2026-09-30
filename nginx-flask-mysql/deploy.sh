@@ -23,8 +23,8 @@ check_http() {
 }
 
 deploy_candidate() {
-    docker compose up -d --no-build --wait --wait-timeout 90 \
-        || return 1
+        docker compose up -d --no-build --force-recreate \
+        --wait --wait-timeout 90 || return 1
     check_http || return 1
 }
 
@@ -38,11 +38,13 @@ if deploy_candidate; then
     echo 'services:' > "$RELEASE/images.yaml"
 
     for service in backend proxy; do
-        container_id="$(docker compose ps -q "$service")"
-        image_id="$(docker inspect --format '{{.Image}}' "$container_id")"
+                container_id="$(docker compose ps -q "$service")"
+        image_ref="$(docker inspect --format '{{.Config.Image}}' "$container_id")"
+        image_id="$(docker image inspect --format '{{.Id}}' "$image_ref")"
         release_tag="assessment-${service}:release-${BUILD_NUMBER}"
 
-        docker tag "$image_id" "$release_tag"
+        docker tag "$image_ref" "$release_tag"
+        docker image inspect "$release_tag" > /dev/null
 
         printf '  %s:\n    image: %s\n' \
             "$service" "$release_tag" >> "$RELEASE/images.yaml"
