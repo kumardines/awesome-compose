@@ -5,12 +5,11 @@ services:
       context: db
     restart: always
     healthcheck:
-         healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(1)"]
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     secrets:
       - db-password
     volumes:
