@@ -1,1 +1,186 @@
+pipeline {
+    agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    environment {
+        COMPOSE_PROJECT_NAME = 'assessment'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Check Tools') {
+            steps {
+                sh '''
+                    set -eu
+                    docker info > /dev/null
+                    docker compose version
+                    trivy --version
+                    curl --version
+                '''
+            }
+        }
+
+        stage('Validate Configuration') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+                        mkdir -p reports
+                        docker compose config --quiet
+                    '''
+                }
+            }
+        }
+
+        stage('Build Images') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+                        docker compose pull db
+                        docker compose build --pull backend proxy
+                    '''
+                }
+            }
+        }
+
+        stage('Python Syntax Check') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+                        docker compose run --rm --no-deps \
+                            backend python -m py_compile hello.py
+                    '''
+                }
+            }
+        }
+
+        stage('Trivy Security Scan') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+
+                        docker compose config --images \
+                            | sort -u > reports/images.txt
+
+                        scan_failed=0
+                        index=0
+
+                        while IFS= read -r image; do
+                            index=$((index + 1))
+
+                            echo "Scanning image: $image"
+
+                            if trivy image \
+                                --scanners vuln \
+                                --severity HIGH,CRITICAL \
+                                --exit-code 1 \
+                                --format table \
+                                --output "reports/trivy-${index}.txt" \
+                                "$image"
+                            then
+                                echo "Scan passed: $image"
+                            else
+                                echo "Scan failed: $image"
+                                scan_failed=1
+                            fi
+                        done < reports/images.txt
+
+                        exit "$scan_failed"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+
+                        docker compose up -d \
+                            --no-build \
+                            --wait \
+                            --wait-timeout 180
+                    '''
+                }
+            }
+        }
+
+        stage('Application Smoke Test') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh '''
+                        set -eu
+                        healthy=0
+
+                        for attempt in $(seq 1 12); do
+                            if curl --fail --silent --show-error \
+                                --max-time 10 \
+                                http://127.0.0.1/ \
+                                > reports/application-response.html
+                            then
+                                healthy=1
+                                break
+                            fi
+
+                            echo "Waiting for application: attempt $attempt"
+                            sleep 5
+                        done
+
+                        if [ "$healthy" -ne 1 ]; then
+                            echo "Application smoke test failed"
+                            exit 1
+                        fi
+
+                        docker compose ps \
+                            > reports/deployment-status.txt
+
+                        echo "Application smoke test passed"
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir('nginx-flask-mysql') {
+                sh '''
+                    mkdir -p reports
+
+                    docker compose ps -a \
+                        > reports/container-status.txt 2>&1 || true
+
+                    docker compose logs --no-color --tail=100 \
+                        > reports/container-logs.txt 2>&1 || true
+                '''
+            }
+
+            archiveArtifacts(
+                artifacts: 'nginx-flask-mysql/reports/**',
+                allowEmptyArchive: true
+            )
+        }
+
+        success {
+            echo 'Build, security scan, deployment, and smoke test passed.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Review Console Output and archived reports.'
+        }
+    }
+}
