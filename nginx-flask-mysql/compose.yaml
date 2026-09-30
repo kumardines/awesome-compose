@@ -4,17 +4,15 @@ services:
         image: mariadb:11.4
     # If you really want to use MySQL, uncomment the following line
     #image: mysql:8
-        healthcheck:
+        services:
+  db:
+    image: mariadb:11.4
+    restart: always
+    healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 5s
       retries: 12
-      start_period: 30s
-    restart: always
-    healthcheck:
-      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 --password="$$(cat /run/secrets/db-password)" --silent']
-      interval: 3s
-      retries: 5
       start_period: 30s
     secrets:
       - db-password
@@ -23,11 +21,10 @@ services:
     networks:
       - backnet
     environment:
-      - MYSQL_DATABASE=example
-      - MYSQL_ROOT_PASSWORD_FILE=/run/secrets/db-password
+      MYSQL_DATABASE: example
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db-password
     expose:
-      - 3306
-      - 33060
+      - "3306"
 
   backend:
     build:
@@ -37,7 +34,7 @@ services:
     secrets:
       - db-password
     ports:
-      - 8000:8000
+      - "8000:8000"
     networks:
       - backnet
       - frontnet
@@ -49,8 +46,8 @@ services:
     build: proxy
     restart: always
     ports:
-      - 80:80
-    depends_on: 
+      - "80:80"
+    depends_on:
       - backend
     networks:
       - frontnet
