@@ -47,8 +47,7 @@ pipeline {
                 dir('nginx-flask-mysql') {
                     sh '''
                         set -eu
-                        docker compose pull db
-                        docker compose build --pull backend proxy
+                        docker compose build --pull db backend proxy
                     '''
                 }
             }
