@@ -117,6 +117,13 @@ pipeline {
             }
         }
     }
+            stage('Image Cleanup') {
+            steps {
+                dir('nginx-flask-mysql') {
+                    sh 'bash cleanup.sh'
+                }
+            }
+        }
 
     post {
         always {
