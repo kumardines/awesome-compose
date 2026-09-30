@@ -1,62 +1,69 @@
-# Assessment: verify automatic Jenkins triggering.
-import os
 from flask import Flask
 import mysql.connector
 
 
 class DBManager:
-    def __init__(self, database='example', host="db", user="root", password_file=None):
-        pf = open(password_file, 'r')
+    def __init__(
+        self,
+        database="example",
+        host="db",
+        user="root",
+        password_file=None,
+    ):
+        with open(password_file, "r") as password_handle:
+            password = password_handle.read()
+
         self.connection = mysql.connector.connect(
-            user=user, 
-            password=pf.read(),
-            host=host, # name of the mysql service as set in the docker compose file
+            user=user,
+            password=password,
+            host=host,
             database=database,
-            auth_plugin='mysql_native_password'
+            auth_plugin="mysql_native_password",
         )
-        pf.close()
         self.cursor = self.connection.cursor()
-    
-       def populate_db(self):
+
+    def populate_db(self):
         self.cursor.execute(
-            'CREATE TABLE IF NOT EXISTS blog '
-            '(id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255))'
+            "CREATE TABLE IF NOT EXISTS blog "
+            "(id INT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(255))"
         )
-        self.cursor.execute('SELECT COUNT(*) FROM blog')
+        self.cursor.execute("SELECT COUNT(*) FROM blog")
         count = self.cursor.fetchone()[0]
 
         if count == 0:
             self.cursor.executemany(
-                'INSERT INTO blog (id, title) VALUES (%s, %s)',
-                [(i, 'Blog post #%d' % i) for i in range(1, 5)]
+                "INSERT INTO blog (id, title) VALUES (%s, %s)",
+                [(i, "Blog post #%d" % i) for i in range(1, 5)],
             )
 
         self.connection.commit()
-    
+
     def query_titles(self):
-        self.cursor.execute('SELECT title FROM blog')
-        rec = []
-        for c in self.cursor:
-            rec.append(c[0])
-        return rec
+        self.cursor.execute("SELECT title FROM blog ORDER BY id")
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def close(self):
+        self.cursor.close()
+        self.connection.close()
 
 
 server = Flask(__name__)
-conn = None
 
-@server.route('/')
-def listBlog():
-    global conn
-    if not conn:
-        conn = DBManager(password_file='/run/secrets/db-password')
+
+@server.route("/")
+def list_blog():
+    conn = DBManager(password_file="/run/secrets/db-password")
+
+    try:
         conn.populate_db()
-    rec = conn.query_titles()
+        titles = conn.query_titles()
+        return "".join(
+            "<div>   Hello  " + title + "</div>"
+            for title in titles
+        )
+    finally:
+        conn.close()
 
-    response = ''
-    for c in rec:
-        response = response  + '<div>   Hello  ' + c + '</div>'
-    return response
 
-
-if __name__ == '__main__':
-    server.run()
+if __name__ == "__main__":
+    server.run(host="0.0.0.0", port=8000)
