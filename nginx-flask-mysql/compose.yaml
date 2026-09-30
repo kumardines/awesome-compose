@@ -1,6 +1,8 @@
 services:
   db:
-    image: mariadb:11.4
+    image: assessment-db:11.4-patched
+    build:
+      context: db
     restart: always
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
