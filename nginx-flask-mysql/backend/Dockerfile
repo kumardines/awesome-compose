@@ -4,7 +4,9 @@ FROM --platform=$BUILDPLATFORM python:3.10-alpine AS builder
 WORKDIR /code
 COPY requirements.txt /code
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip3 install -r requirements.txt
+    pip3 install --upgrade pip setuptools wheel && \
+    pip3 install -r requirements.txt && \
+    pip3 check
 
 COPY . .
 
